@@ -1,0 +1,48 @@
+# ── Line-ending normalisation ──────────────────────────────────────
+* text=auto
+
+# ── Source code ────────────────────────────────────────────────────
+*.py        text diff=python
+*.sql       text
+*.txt       text
+*.md        text
+*.json      text
+*.xml       text
+*.yaml      text
+*.yml       text
+*.toml      text
+*.cfg       text
+*.ini       text
+*.sh        text eol=lf
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# ── Jupyter notebooks ─────────────────────────────────────────────
+*.ipynb     text diff=python linguist-language=Python
+
+# ── Data / binary (no diff, no merge, LFS-ready) ──────────────────
+*.csv       text
+*.parquet   binary
+*.pkl       binary
+*.h5        binary
+*.hdf5      binary
+*.feather   binary
+*.zip       binary
+*.tar.gz    binary
+*.7z        binary
+*.sqlite    binary
+*.db        binary
+
+# ── Images ─────────────────────────────────────────────────────────
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.svg       text
+
+# ── Documents ──────────────────────────────────────────────────────
+*.pdf       binary
+
+# ── Prevent accidental merge conflicts in generated files ──────────
+*.lock      text -diff linguist-generated

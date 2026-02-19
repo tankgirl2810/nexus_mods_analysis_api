@@ -1,0 +1,63 @@
+# ── Secrets & credentials ──────────────────────────────────────────
+api_key.txt
+*.pem
+*.key
+.env
+.env.*
+local.settings.json
+credentialconnection.txt
+
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# ── Virtual environments ──────────────────────────────────────────
+.venv/
+venv/
+ENV/
+
+# ── Jupyter ───────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Data files (keep the repo lightweight) ────────────────────────
+*.csv
+*.parquet
+*.pkl
+*.h5
+*.hdf5
+*.feather
+*.sqlite
+*.db
+
+# ── Large / generated artefacts ───────────────────────────────────
+*.zip
+*.tar.gz
+*.7z
+
+# ── Logs ──────────────────────────────────────────────────────────
+*.log
+
+# ── OS junk ───────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+# ── IDE / editor ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Azure Functions build output ──────────────────────────────────
+bin/
+obj/
+.python_packages/
