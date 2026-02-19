@@ -1,0 +1,17 @@
+Data cleaning: 
+- Mainly done in SQL with the removal or empty rows, duplicates 
+- Further cleaning is done when querying the data to get: 
+    - for authors data 
+       - Authors who have only been active since 01-01-2024
+       - who are not deleted
+
+-Categories are cleaned by: 
+  - General data matching based on the same naming 
+  - further data matching with Fuzzy matching 
+     - pre processing to remove Upper case lower case errors and other errors
+     - going by a 50% match 
+
+- description cleaning on language based ones
+
+
+- 

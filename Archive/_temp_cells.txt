@@ -1,0 +1,597 @@
+=== CELL 0 (code) ===
+import numpy as np
+import pandas as pd
+from tqdm import tqdm 
+import os
+os.environ["LOKY_MAX_CPU_COUNT"] = "24" 
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import silhouette_score
+from scipy.cluster.hierarchy import dendrogram, linkage
+import umap.umap_ as umap
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sqlalchemy import create_engine
+import hdbscan
+from scipy.cluster.hierarchy import fcluster
+#from pyclustering import hopkins
+#from sklearn.metrics import davies_bouldin_score
+#from gap_statistic import OptimalK
+from sklearn.preprocessing import PowerTransformer
+from scipy.stats import yeojohnson,boxcox, skew
+from scipy.stats.mstats import winsorize
+
+=== CELL 1 (code) ===
+def check_dimensionality(data):
+
+    print("\n Checking Data Dimensionality...")
+    
+    data_numeric = data.select_dtypes(include=[np.number])
+    
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(data_numeric)
+
+    num_features = data_scaled.shape[1]
+    high_dimensional = num_features > 10
+    reduced_data = data_scaled
+
+    if high_dimensional:
+        print(" High dimensionality detected. Applying PCA for visualization...")
+        try:
+            pca = PCA(n_components=10)
+            reduced_data = pca.fit_transform(data_scaled)
+            return reduced_data, "PCA applied with 10 components."
+        except Exception as e:
+            print(f"PCA failed: {e}")
+            return data_scaled, "PCA failed. Using original scaled data."
+
+    return reduced_data, 
+
+=== CELL 2 (code) ===
+def visualize_pca(reduced_data):
+    """Plots PCA for cluster shape visualization."""
+    print("\n Visualizing PCA Reduction...")
+    plt.figure(figsize=(8,6))
+    sns.scatterplot(x=reduced_data[:,0], y=reduced_data[:,1])
+    plt.title("PCA: Data Structure in 2D")
+    plt.show()
+    plt.savefig(r"C:\Users\nicta\Documents\Repos\Nexus_mods_graphsql\nexus_mods_api_webscrape\fig\PCA_DataStructure.jpeg")
+
+
+=== CELL 3 (code) ===
+def run_kmeans(data, n_clusters):
+    """Runs K-Means clustering and computes silhouette score."""
+    print("\n Running K-Means Clustering...")
+    try:
+        kmeans = KMeans(n_clusters=n_clusters if n_clusters else 4, random_state=42).fit(data)
+        score = silhouette_score(data, kmeans.labels_)
+        print(f" K-Means done! Silhouette Score: {score:.2f}")
+        return f"K-Means Silhouette Score: {score:.2f}", score
+    except Exception as e:
+        print(f" K-Means failed: {e}")
+        return "K-Means failed.", None
+
+
+
+=== CELL 4 (code) ===
+def run_dbscan(data):
+    """Runs DBSCAN with adaptive parameter tuning."""
+    print("Running DBSCAN Clustering with Adaptive Parameters...")
+    best_score = None
+    best_params = None
+
+    for eps in [0.1, 0.3, 0.5, 0.7, 1.0]:
+        for min_samples in [3, 5, 10]:
+            try:
+                print(f"   🔍 Trying DBSCAN with eps={eps} and min_samples={min_samples}...")
+                dbscan = DBSCAN(eps=eps, min_samples=min_samples).fit(data)
+                labels = dbscan.labels_
+                num_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+                print(f"   🟢 DBSCAN found {num_clusters} clusters.")
+
+                if num_clusters > 1:
+                    score = silhouette_score(data, labels)
+                    if best_score is None or score > best_sco
+
+=== CELL 5 (code) ===
+def run_gmm(data, n_clusters):
+    """Runs Gaussian Mixture Model (GMM) and computes silhouette score."""
+    print("Running Gaussian Mixture Model (GMM)...")
+    try:
+        gmm = GaussianMixture(n_components=n_clusters if n_clusters else 4).fit(data)
+        labels = gmm.predict(data)
+        score = silhouette_score(data, labels)
+        return f"GMM Silhouette Score: {score:.2f}", score
+    except Exception as e:
+        print(f"GMM failed: {e}")
+        return "GMM failed.", None
+
+=== CELL 6 (code) ===
+def suggest_clustering_method(data, supervised=False, n_clusters=None):
+    """
+    Main function 
+    """
+    reduced_data, pca_message = check_dimensionality(data)
+    if pca_message:
+        print(pca_message)
+
+    visualize_pca(reduced_data)
+    cluster_methods = ["K-Means", "DBSCAN", 
+                       #"Hierarchical Clustering", 
+                       "GMM"]
+    pbar = tqdm(total=len(cluster_methods), desc="Running Clustering Methods")
+
+    results = []
+    kmeans_result, kmeans_score = run_kmeans(reduced_data, n_clusters)
+    dbscan_result, dbscan_score = run_dbscan(reduced_data)
+    hdbscan_result, hdbscan_score = run_hdbscan(reduced_data)
+    #hierarchical_result = run_hierarchical_clustering(data)
+    gmm_result, gmm_score = run_gmm(reduced_data, n_clusters)
+
+    pbar.updat
+
+=== CELL 7 (code) ===
+# SQLAlchemy connection setup
+engine = create_engine(
+    "mssql+pyodbc://admin4327:Tr3m3r3Pr1nc3!@nmntserver.database.windows.net/NexusModsDB?driver=ODBC+Driver+17+for+SQL+Server&Connect Timeout=60"
+)
+
+=== CELL 8 (code) ===
+query = """
+SELECT 
+    a.member_id,
+    a.joined, 
+    MIN(c.created_timestamp) as first_mod_created_date,
+    MAX(c.created_timestamp) as last_mod_created_date,
+    DATEDIFF(DAY, a.joined, a.last_active) AS active_days,
+    a.recognized_author,
+    a.mod_count AS published_mod_count,
+    a.owned_mod_count - a.mod_count AS unpublished_mod_count,
+    a.collection_count,
+    a.contributed_mod_count,
+    a.owned_mod_count AS all_mods_count,
+    a.endorsements_given,
+    a.posts,
+    a.kudos,
+    a.views,
+    a.donations_enabled,
+    COUNT(DISTINCT c.domain_name) as total_domains,
+    Count(distinct e.new_group_category) as total_categories,
+    COUNT(c.endorsement_count) AS endorsements_received,
+    COUNT(c.contains_adult_content) AS adult_content_count,
+    SUM(c.mod_downloads) AS all_mod_
+
+=== CELL 9 (code) ===
+df = pd.read_sql(query, engine)
+#f["total_domains"].value_counts()
+
+=== CELL 10 (code) ===
+df.dtypes
+df.head()
+
+=== CELL 11 (code) ===
+df['first_mod_created_date'] = pd.to_datetime(df['first_mod_created_date'], unit='s')
+df['mod_creation_days_since_joined'] = (df['first_mod_created_date'] - df['joined']).dt.days 
+df.dtypes
+df["has_collection"] = (df["collection_count"] > 0).astype(int)
+df["has_wastebinned"] = (df["all_wastebinned_mods"] > 0).astype(int)
+df["has_removed"] = (df["all_removed_mods"] > 0).astype(int)
+df["has_under_moderation"] = (df["all_under_moderation_mods"] > 0).astype(int)
+df["has_hidden"] = (df["all_hidden_mods"] > 0).astype(int)
+df["has_contributed"] = (df["contributed_mod_count"] > 0).astype(int)
+df["has_adult_content"] = (df["adult_content_count"] >= 1).astype(int)
+
+=== CELL 12 (code) ===
+df["total_domains_binned"] = pd.cut(
+    df["total_domains"], 
+    bins=[0, 1, 3, 5, 10, np.inf], 
+    labels=["1", "2-3", "4-5", "6-10", "11+"]
+)
+
+=== CELL 13 (code) ===
+df.dtypes
+
+=== CELL 14 (code) ===
+df_numeric = df.drop(columns=["total_domains","total_domains_binned","member_id","joined","first_mod_created_date","collection_count",
+                              "all_wastebinned_mods","all_removed_mods","all_under_moderation_mods","all_hidden_mods"]).dropna()  
+df_numeric = df_numeric.astype(float)
+
+=== CELL 15 (code) ===
+df_numeric.head()
+
+=== CELL 16 (markdown) ===
+I wanted to check again the skewedness just to be sure as I didn't like there were highly skewed variables still. I read somewhere you could "ignore it" but nahh
+
+=== CELL 17 (code) ===
+def apply_transformations(df):
+    df_transformed = df.copy()
+    
+    log_features = ['endorsements_given', 'posts', 'kudos']
+    for col in log_features:
+        df_transformed[col] = np.log1p(df[col].clip(lower=0))
+    df_transformed['views'] = winsorize(df['views'], limits=[0.02, 0.02])
+    cube_root_features = ['views']
+    for col in cube_root_features:
+        df_transformed[col] = np.cbrt(df[col])
+    
+    yeo_johnson_features = [
+        'published_mod_count', 'unpublished_mod_count', 'all_mods_count', 
+        'total_categories', 'endorsements_received', 'adult_content_count','all_mod_downloads','all_unique_mod_downloads'
+    ]
+    for col in yeo_johnson_features:
+        df_transformed[col], _ = yeojohnson(df[col] + 1)  
+    
+    binary_features = [
+        'has_collection', 'ha
+
+=== CELL 18 (code) ===
+df_transformed = apply_transformations(df)
+
+=== CELL 19 (code) ===
+skew_check = df_transformed.drop(columns=["total_domains_binned","total_domains","member_id","joined","first_mod_created_date","collection_count","contributed_mod_count",
+                                          "all_wastebinned_mods","all_removed_mods","all_under_moderation_mods","all_hidden_mods",'has_collection', 'has_wastebinned', 'has_removed', 
+        'has_under_moderation', 'has_hidden', 'has_contributed','has_adult_content']).dropna()  
+skew_check.skew()
+
+=== CELL 20 (code) ===
+category_order = ["1", "2-3", "4-5", "6-10", "11+"]  
+
+encoder = OrdinalEncoder(categories=[category_order])
+df_transformed["total_domains_binned"] = encoder.fit_transform(df_transformed[["total_domains_binned"]])
+
+=== CELL 21 (code) ===
+df_transformed_dropped = df_transformed.drop(columns=["member_id","joined","first_mod_created_date","total_domains_binned","collection_count",
+                                                      "contributed_mod_count","all_wastebinned_mods","all_removed_mods","all_under_moderation_mods",
+                                                      "all_hidden_mods", "active_days","total_categories","recognized_author","total_domains",
+                                                     "has_contributed","has_hidden","has_removed","has_collection","donations_enabled","has_wastebinned",
+                                                     "has_under_moderation","has_adult_content"]).dropna()  
+
+=== CELL 22 (code) ===
+df_transformed_dropped.dtypes
+
+=== CELL 23 (markdown) ===
+#### RESULTS WHEN TESTED ON SKEWED Data'
+
+K-Means Silhouette Score: 0.98
+DBSCAN Silhouette Score: -0.85 (eps=1.0, min_samples=5)
+HDBSCAN Silhouette Score: -0.77
+GMM Silhouette Score: 0.04'
+
+Based on this K-Means is abest suit and Hierarchical clustering I need to exaamine closer/fix up
+
+#### RESULTS WHEN TESTED ON UNSKEWED and Scaled Data (PCA components at 2)'
+PCA
+![PCA Data Structure in 2D](C:\Users\nicta\Documents\Repos\Nexus_mods_graphsql\nexus_mods_api_webscrape\fig\PCA_DataStructure.png)
+K-Means Silhouette Score: 0.43
+DBSCAN Silhouette Score: 0.61 (eps=0.7, min_samples=5)
+HDBSCAN Silhouette Score: -0.22
+GMM Silhouette Score: 0.33'
+
+### FINAL RESULTS TESTED ON UNSKEWED and SCALED DATA (PCA components at 10)
+K-Means Silhouette Score: 0.23
+DBSCAN Silhouette Score: 0.03 (eps=1.0, min_sam
+
+=== CELL 24 (code) ===
+import psutil
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+from joblib import parallel_backend
+import time
+import joblib
+
+=== CELL 25 (code) ===
+scaler = StandardScaler()
+data_scaled = scaler.fit_transform(df_transformed_dropped)
+
+=== CELL 26 (code) ===
+pca = PCA().fit(data_scaled)
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('Number of Components')
+plt.ylabel('Variance')
+plt.title('PCA')
+plt.show()
+
+
+=== CELL 27 (code) ===
+pca = PCA(n_components=7)  #from the previous steps determine best fit
+pca_data = pca.fit_transform(data_scaled)
+
+=== CELL 28 (code) ===
+loadings = np.abs(pca.components_)  
+explained_variance = pca.explained_variance_ratio_
+print(explained_variance)
+
+=== CELL 29 (code) ===
+cumulative_variance = np.cumsum(explained_variance)
+
+=== CELL 30 (code) ===
+n_components_optimal = np.argmax(cumulative_variance >= 0.95) + 1 
+print(f"Optimal number of PCA components: {n_components_optimal}")
+
+=== CELL 31 (code) ===
+loadings = np.abs(pca.components_) 
+explained_variance = pca.explained_variance_ratio_  
+
+=== CELL 32 (code) ===
+feature_weights = np.dot(explained_variance, loadings)
+
+=== CELL 33 (code) ===
+feature_importance_df = pd.DataFrame({"Feature": df_transformed_dropped.columns, "Importance": feature_weights})
+feature_importance_df = feature_importance_df.sort_values(by="Importance", ascending=False)
+feature_importance_df.head(24)
+
+=== CELL 34 (code) ===
+devotion_scores = np.dot(data_scaled, feature_weights) #multiples by original scaled features to give weights
+
+=== CELL 35 (code) ===
+df_transformed_clustered = df_transformed_dropped.copy()
+df_transformed_clustered["Devotion_Score"] = devotion_scores
+
+=== CELL 36 (code) ===
+n_clusters = 4  # Choose based on previous silhouette analysis
+kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+df_transformed_clustered["Devotion_Cluster"] = kmeans.fit_predict(devotion_scores.reshape(-1, 1))
+
+=== CELL 37 (code) ===
+df_transformed_clustered.head()
+
+=== CELL 38 (code) ===
+plt.figure(figsize=(10, 6))
+sns.boxplot(x=df_transformed_clustered["Devotion_Cluster"], y=df_transformed_clustered["Devotion_Score"], palette="viridis")
+plt.title("Distribution of Devotion Scores by Cluster")
+plt.xlabel("Devotion Cluster")
+plt.ylabel("Devotion Score")
+plt.show()
+
+=== CELL 39 (code) ===
+cluster_medians = df_transformed_clustered.groupby("Devotion_Cluster")["Devotion_Score"].median().sort_values()
+sorted_clusters = {old_label: new_label for new_label, old_label in enumerate(cluster_medians.index)}
+
+df_transformed_clustered["sorted_devotion_cluster"] = df_transformed_clustered["Devotion_Cluster"].replace(sorted_clusters)
+
+sns.boxplot(x=df_transformed_clustered["sorted_devotion_cluster"], y=df_transformed_clustered["Devotion_Score"])
+plt.title("Reordered Devotion Measure by Cluster")
+plt.show()
+
+
+=== CELL 40 (code) ===
+cluster_profile = df_transformed_clustered.groupby("Devotion_Cluster").agg({
+    "Devotion_Score": ["count", "mean", "median", "min", "max", "std"],
+    "all_mod_downloads": ["mean", "median"],
+    "all_unique_mod_downloads": ["mean", "median"],
+    "views": ["mean", "median"],
+    "posts": ["mean", "median"],
+    "kudos": ["mean", "median"],
+    "endorsements_given": ["mean", "median"],
+    "published_mod_count": ["mean", "median"],
+    "unpublished_mod_count": ["mean", "median"],
+    "endorsements_received": ["mean", "median"],
+    "all_mods_count": ["mean", "median"],
+    "adult_content_count": ["mean", "median"]
+
+})
+
+
+# Rename Columns for Better Readability
+cluster_profile.columns = ['_'.join(col).strip() for col in cluster_profile.columns.values]
+
+=== CELL 41 (code) ===
+cluster_profile.head()
+
+=== CELL 42 (code) ===
+from sklearn.ensemble import RandomForestClassifier
+X = df_transformed_clustered.drop(columns=["Devotion_Cluster", "Devotion_Score"])  
+y = df_transformed_clustered["Devotion_Cluster"]
+
+rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_model.fit(X, y)
+
+feature_importance = pd.Series(rf_model.feature_importances_, index=X.columns).sort_values(ascending=False)
+
+=== CELL 43 (code) ===
+feature_importance.head(25)
+
+=== CELL 44 (code) ===
+cluster_labels = {
+    0: "Novice",
+    1: "Moderate",
+    2: "Core",
+    3: "Devotee"
+}
+
+=== CELL 45 (code) ===
+df_transformed_clustered["Devotion_Label"] = df_transformed_clustered["sorted_devotion_cluster"].map(cluster_labels)
+
+=== CELL 46 (code) ===
+df.head()
+
+=== CELL 47 (code) ===
+query = """
+SELECT 
+    a.member_id,
+    c.domain_name,
+    c.mod_id,
+    c.name,
+    c.summary,
+    t.[detected_language],
+    t.[translated_description],
+    g.new_group_category 
+    
+FROM dbo.Authors AS a 
+LEFT JOIN dbo.CleanedModData AS c ON c.member_id = a.member_id
+LEFT JOIN dbo.TranslatedModData as t on t.mod_id = c.mod_id and t.game_id = c.game_id
+LEFT JOIN GameCategories AS g ON g.category_id = c.category_id and g.game_id = c.game_id
+WHERE a.deleted = 0 
+AND a.last_active IS NOT NULL 
+AND a.last_active >= '2024-01-01'"""
+
+=== CELL 48 (code) ===
+df_mods = pd.read_sql(query, engine)
+
+=== CELL 49 (code) ===
+df_x = df.merge(
+    df_transformed_clustered[["Devotion_Score", "Devotion_Cluster","sorted_devotion_cluster","Devotion_Label"]],
+    left_index=True,  
+    right_index=True,  
+    how="left"  
+)
+
+=== CELL 50 (code) ===
+df_x["member_id"] = df_x["member_id"].astype(int)
+df_mods["member_id"] = df_mods["member_id"].astype(int)
+df_x = df_x.reset_index()
+df_mods = df_mods.reset_index()
+
+=== CELL 51 (code) ===
+df_final = df_x.merge(
+    df_mods, 
+    on= "member_id",
+    how="left", 
+    suffixes=("", "_mods")
+)
+
+=== CELL 52 (code) ===
+df_final.head()
+
+=== CELL 53 (code) ===
+df_final.dtypes
+
+=== CELL 54 (code) ===
+df_time_analysis = df_final.groupby(pd.Grouper(key="joined", freq="M")).agg({
+    "Devotion_Score": "mean",
+    "Devotion_Cluster": "mean",
+    "published_mod_count": "sum"
+}).reset_index()
+
+plt.figure(figsize=(12,6))
+sns.lineplot(data=df_time_analysis, x="joined", y="Devotion_Score", label="Avg Devotion Score")
+sns.lineplot(data=df_time_analysis, x="joined", y="published_mod_count", label="Total Published Mods", linestyle="dashed")
+plt.title("Devotion Score & Modding Activity Over Time")
+plt.xlabel("Join Date")
+plt.ylabel("Score / Mod Count")
+plt.legend()
+plt.show()
+
+=== CELL 55 (code) ===
+df_domain_analysis = df_final.groupby("domain_name")["Devotion_Score"].mean().sort_values(ascending=False)
+
+=== CELL 56 (code) ===
+df_domain_analysis.head()
+
+=== CELL 57 (code) ===
+df_domain_analysis = df_final.groupby("domain_name").agg(
+    Devotion_Score=("Devotion_Score", "mean"),  
+    #Devotion_label=("Devotion_Label","max"),
+    Sorted_Devotion=("sorted_devotion_cluster", "mean"),  
+    Unique_Modders=("member_id", "nunique"), 
+    Unique_Mods=("mod_id", "nunique") 
+).reset_index()
+
+df_domain_analysis.head(100)
+
+=== CELL 58 (code) ===
+df_domain_analysis_sorted = df_domain_analysis.sort_values(by=["Devotion_Score", "Unique_Modders"], ascending=False)
+
+=== CELL 59 (code) ===
+pd.set_option("display.max_rows", 100) 
+df_domain_analysis_sorted.head(100)
+
+=== CELL 60 (code) ===
+df_time_analysis = df_final.groupby(pd.Grouper(key="joined", freq="Y")).agg({
+    "Devotion_Score": "mean",
+    "Devotion_Cluster": "mean",
+    "published_mod_count": "sum"
+}).reset_index()
+
+=== CELL 61 (code) ===
+top_1_percent_cutoff = df_x["Devotion_Score"].quantile(0.99)  
+df_top_modders = df_x[df_x["Devotion_Score"] >= top_1_percent_cutoff]
+df_top_modders.head(10)
+
+=== CELL 62 (code) ===
+bottom_1_percent_cutoff = df_x["Devotion_Score"].quantile(0.01)  
+df_bottom_modders = df_x[df_x["Devotion_Score"] <= bottom_1_percent_cutoff]
+df_bottom_modders.head(10)
+
+
+=== CELL 63 (code) ===
+top_1_percent_cutoff = df_x["Devotion_Score"].quantile(0.99)
+bottom_1_percent_cutoff = df_x["Devotion_Score"].quantile(0.01)
+
+df_middle_modders = df_x[(df_x["Devotion_Score"] > bottom_1_percent_cutoff) & 
+                         (df_x["Devotion_Score"] < top_1_percent_cutoff)]
+df_middle_modders.head(10)
+
+=== CELL 64 (code) ===
+df_profile = df_final.groupby("Devotion_Label").agg({
+    "member_id": "nunique", 
+    "mod_id": "nunique", 
+    "all_mods_count": "mean",   
+    "posts": "mean", 
+    "views": "mean", 
+    "kudos": "mean", 
+    "endorsements_received": "mean",  
+    "endorsements_given": "mean",  
+    "active_days": "mean",  
+    "total_domains": "mean",  
+    "mod_creation_days_since_joined": "mean",  
+    "adult_content_count": "max",  
+    "domain_name": lambda x: x.mode()[0] if not x.mode().empty else None,  
+    "domain_name": "nunique" 
+}).rename(columns={"domain_name": "unique_domains"}).reset_index()
+
+df_profile.head()
+
+=== CELL 65 (code) ===
+df_domain_stats = df_final.groupby(["Devotion_Label", "domain_name"]).agg({
+    "all_mods_count": "mean",   
+    "posts": "mean", 
+    "views": "mean", 
+    "kudos": "mean", 
+    "endorsements_received": "mean",  
+    "endorsements_given": "mean",  
+    "active_days": "mean",  
+    "total_domains": "mean",  
+    "mod_creation_days_since_joined": "mean",  
+    "adult_content_count": "max",  
+}).reset_index()
+
+
+df_mod_counts = df_final.groupby(["Devotion_Label", "domain_name"]).size().reset_index(name="mod_count")
+top_10_domains = df_mod_counts.groupby("domain_name")["mod_count"].sum().nlargest(10).index.tolist()
+df_domain_filtered = df_mod_counts[df_mod_counts["domain_name"].isin(top_10_domains)]
+
+df_final_stacked = df_domain_filtered.merge(df_domain_stats, on=["Devotion_Label", "domain_nam
+
+=== CELL 66 (code) ===
+display(df_final_stacked)
+
+=== CELL 67 (code) ===
+df_domain_stats = df_final.groupby(["Devotion_Label", "domain_name"]).agg({
+    "member_id":"nunique",
+    "all_mods_count": "mean", 
+    "active_days": "mean", 
+    "total_domains": "mean", 
+    "mod_creation_days_since_joined": "mean",  
+    "posts": "mean", 
+    "views": "mean", 
+    "kudos": "mean", 
+    "endorsements_received": "mean",  
+    "endorsements_given": "mean",  
+     
+    "adult_content_count": "max",  
+}).reset_index()
+
+
+df_mod_counts = df_final.groupby(["Devotion_Label", "domain_name"]).size().reset_index(name="mod_count")
+top_10_domains = df_mod_counts.groupby("domain_name")["mod_count"].sum().nlargest(10).index.tolist()
+df_domain_filtered = df_mod_counts[df_mod_counts["domain_name"].isin(top_10_domains)]
+df_category_counts = df_final.groupby(["Devotion_Label", "domain_n
+
+=== CELL 68 (code) ===
+df_final_stacked .head(40)
+
+=== CELL 69 (code) ===
+df_final['last_mod_created_date'] = pd.to_datetime(df_final['last_mod_created_date'], unit='s')
+#f_final['first_mod_created_date'] = pd.to_datetime(df_final['first_mod_created_date'], unit='s')
+
